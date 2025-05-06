@@ -10,7 +10,6 @@ local window = require "octo.ui.window"
 local writers = require "octo.ui.writers"
 local utils = require "octo.utils"
 local config = require "octo.config"
-local colors = require "octo.ui.colors"
 local vim = vim
 
 -- a global variable where command handlers can access the details of the last
@@ -71,6 +70,27 @@ function M.setup()
 
   -- supported commands
   M.commands = {
+    workflow = {
+      edit = function()
+        local workflow = require "octo.workflow_runs"
+        local current_wf = workflow.current_wf
+
+        if current_wf then
+          workflow.edit(current_wf.workflowName)
+          return
+        end
+
+        workflow.workflow_list {
+          cb = workflow.edit,
+        }
+      end,
+      list = function()
+        local workflow = require "octo.workflow_runs"
+        workflow.workflow_list {
+          cb = workflow.edit,
+        }
+      end,
+    },
     run = {
       list = function()
         local function co_wrapper()
@@ -456,8 +476,25 @@ function M.setup()
       end,
     },
     repo = {
+      search = function(prompt)
+        picker.search {
+          type = "REPOSITORY",
+          prompt = prompt,
+        }
+      end,
       list = function(login)
-        picker.repos { login = login }
+        local opts = { login = login }
+
+        if not opts.login then
+          if vim.g.octo_viewer then
+            opts.login = vim.g.octo_viewer
+          else
+            local remote_hostname = utils.get_remote_host()
+            opts.login = gh.get_user_name(remote_hostname)
+          end
+        end
+
+        picker.repos(opts)
       end,
       view = function(repo)
         if repo == nil and utils.cwd_is_git() then
@@ -864,11 +901,6 @@ function M.process_varargs(repo, ...)
 end
 
 function M.octo(object, action, ...)
-  if not _G.octo_colors_loaded then
-    colors.setup()
-    _G.octo_colors_loaded = true
-  end
-
   if not object then
     if config.values.enable_builtin then
       M.commands.actions()
@@ -1240,7 +1272,7 @@ function M.change_state(state)
     jq = ".data.updateIssue.issue"
     fields = {}
   elseif buffer:isIssue() and state == "OPEN" then
-    query = graphql "reopen_issue_mutation"
+    query = mutations.reopen_issue
     desired_state = "OPEN"
     jq = ".data.reopenIssue.issue"
     fields = { issueId = id }
@@ -2236,8 +2268,7 @@ function M.copy_url()
     url = utils.get_remote_url()
   end
 
-  vim.fn.setreg("+", url, "c")
-  utils.info("Copied URL '" .. url .. "' to the system clipboard (+ register)")
+  utils.copy_url(url)
 end
 
 function M.actions()
@@ -2268,6 +2299,9 @@ function M.search(...)
   if string.match(prompt, "is:discussion") then
     type = "DISCUSSION"
     prompt = string.gsub(prompt, "is:discussion", "")
+  elseif string.match(prompt, "is:repository") then
+    type = "REPOSITORY"
+    prompt = string.gsub(prompt, "is:repository", "")
   end
 
   picker.search { prompt = prompt, type = type }

@@ -205,7 +205,7 @@ function Review:initiate(opts)
   if conf.use_local_fs and not utils.in_pr_branch(pr) then
     local choice = vim.fn.confirm("Currently not in PR branch, would you like to checkout?", "&Yes\n&No", 2)
     if choice == 1 then
-      utils.checkout_pr_sync { repo = pr.repo, pr_number = pr.number, timeout = conf.timeout }
+      utils.checkout_pr_sync { repo = pr.repo, pr_number = pr.number }
     end
   end
 
@@ -537,6 +537,13 @@ function M.get_current_layout()
   local current_review = M.get_current_review()
   if current_review then
     return M.get_current_review().layout
+  end
+end
+
+function M.on_tab_enter()
+  local current_review = M.get_current_review()
+  if current_review and current_review.layout then
+    current_review.layout:on_enter()
   end
 end
 

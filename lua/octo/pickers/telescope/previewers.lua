@@ -20,7 +20,7 @@ local discussion_preview = function(obj, bufnr)
   writers.write_title(bufnr, tostring(obj.title), 1)
   writers.write_state(bufnr, state, obj.number)
   writers.write_discussion_details(bufnr, obj)
-  writers.write_body(bufnr, obj, 12)
+  writers.write_body(bufnr, obj, 13)
 
   if obj.answer ~= vim.NIL then
     local line = vim.api.nvim_buf_line_count(bufnr) + 1
@@ -51,7 +51,7 @@ local discussion = defaulter(function(opts)
       local owner, name = utils.split_repo(entry.repo)
 
       gh.api.graphql {
-        query = graphql "discussion_query",
+        query = queries.discussion,
         fields = { owner = owner, name = name, number = number },
         jq = ".data.repository.discussion",
         opts = {

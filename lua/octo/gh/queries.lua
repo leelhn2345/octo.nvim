@@ -110,6 +110,7 @@ query($endCursor: String) {
       author {
         login
       }
+      authorAssociation
       viewerDidAuthor
       viewerCanUpdate
       ...ReactionGroupsFragment
@@ -219,6 +220,21 @@ query($owner: String!, $name: String!, $number: Int!) {
   }
 }
 ]]
+
+M.discussion_summary = [[
+query($owner: String!, $name: String!, $number: Int!) {
+  repository(owner: $owner, name: $name) {
+    discussion(number: $number) {
+      ...DiscussionInfoFragment
+      createdAt
+      body
+      labels(first: 20) {
+        ...LabelConnectionFragment
+      }
+    }
+  }
+}
+]] .. fragments.discussion_info .. fragments.label_connection .. fragments.label
 
 -- https://docs.github.com/en/graphql/reference/unions#issueorpullrequest
 M.issue_summary = [[
@@ -340,8 +356,8 @@ query($prompt: String!, $type: SearchType = ISSUE) {
 ]]
 
 M.search = [[
-query($prompt: String!, $type: SearchType = ISSUE) {
-  search(query: $prompt, type: $type, last: 100) {
+query($prompt: String!, $type: SearchType = ISSUE, $last: Int = 100) {
+  search(query: $prompt, type: $type, last: $last) {
     nodes {
       ... on Issue {
         __typename
@@ -362,14 +378,15 @@ query($prompt: String!, $type: SearchType = ISSUE) {
         repository { nameWithOwner }
       }
       ... on Discussion {
+        __typename
+        category {
+          name
+        }
         ...DiscussionInfoFragment
       }
       ... on Repository {
         __typename
-        name
-        nameWithOwner
-        description
-        url
+        ...RepositoryFragment
       }
       ... on Organization {
         __typename
@@ -384,7 +401,7 @@ query($prompt: String!, $type: SearchType = ISSUE) {
     }
   }
 }
-]] .. fragments.discussion_info
+]] .. fragments.discussion_info .. fragments.repository
 
 M.discussions = [[
 query(
@@ -726,11 +743,30 @@ query($endCursor: String) {
 ]]
 
 M.file_content = [[
-query {
-  repository(owner: "%s", name: "%s") {
-    object(expression: "%s:%s") {
+query($owner: String!, $name: String!, $expression: String!) {
+  repository(owner: $owner, name: $name) {
+    object(expression: $expression) {
       ... on Blob {
         text
+      }
+    }
+  }
+}
+]]
+
+M.directory_file_content = [[
+query($owner: String!, $name: String!, $expression: String!) {
+  repository(owner: $owner, name: $name) {
+    object(expression: $expression) {
+      ... on Tree {
+        entries {
+          name
+          object {
+            ... on Blob {
+              text
+            }
+          }
+        }
       }
     }
   }
@@ -830,29 +866,11 @@ query($endCursor: String) {
 ]]
 
 M.repos = [[
-query($endCursor: String) {
-  repositoryOwner(login: "%s") {
+query($login: String!, $endCursor: String) {
+  repositoryOwner(login: $login) {
     repositories(first: 10, after: $endCursor, ownerAffiliations: [COLLABORATOR, ORGANIZATION_MEMBER, OWNER]) {
       nodes {
-        createdAt
-        description
-        diskUsage
-        forkCount
-        isArchived
-        isDisabled
-        isEmpty
-        isFork
-        isInOrganization
-        isPrivate
-        isSecurityPolicyEnabled
-        name
-        nameWithOwner
-        parent {
-          nameWithOwner
-        }
-        stargazerCount
-        updatedAt
-        url
+        ...RepositoryFragment
       }
       pageInfo {
         hasNextPage
@@ -861,38 +879,20 @@ query($endCursor: String) {
     }
   }
 }
-]]
+]] .. fragments.repository
 
 M.repository = [[
 query($owner: String!, $name: String!) {
   repository(owner: $owner, name: $name) {
-    id
-    nameWithOwner
-    description
-    forkCount
-    stargazerCount
-    diskUsage
-    createdAt
-    updatedAt
+    ...RepositoryFragment
     pushedAt
-    isFork
     defaultBranchRef {
       name
     }
-    parent {
-      nameWithOwner
-    }
-    isArchived
-    isDisabled
-    isPrivate
-    isEmpty
-    isInOrganization
-    isSecurityPolicyEnabled
     securityPolicyUrl
     defaultBranchRef {
       name
     }
-    url
     isLocked
     lockReason
     isMirror
@@ -918,7 +918,7 @@ query($owner: String!, $name: String!) {
     }
   }
 }
-]]
+]] .. fragments.repository
 
 M.gists = [[
 query($endCursor: String) {

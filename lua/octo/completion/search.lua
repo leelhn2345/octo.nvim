@@ -43,7 +43,6 @@ local get_labels = function(search, repo)
 
   local output = gh.label.list(opts)
   if utils.is_blank(output) then
-    utils.error "No labels found"
     return {}
   end
 
@@ -279,11 +278,27 @@ local complete_category = function(argLead, cmdLine)
   return valid_categories
 end
 
+--- https://docs.github.com/en/issues/using-labels-and-milestones-to-track-work/managing-labels#about-default-labels
+local default_labels = {
+  "bug",
+  "documentation",
+  "duplicate",
+  "enhancement",
+  "good first issue",
+  "help wanted",
+  "invalid",
+  "question",
+  "wontfix",
+}
+
 local complete_label = function(argLead, cmdLine)
   local repo = string.match(cmdLine, "repo:([%w%-%./_]+)")
 
   local desired_label = string.gsub(argLead, "label:", "")
   local labels = get_labels(desired_label, repo)
+  if #labels == 0 then
+    labels = default_labels
+  end
   local valid_labels = {}
   for _, label in ipairs(labels) do
     if string.match(label, " ") then
@@ -301,6 +316,7 @@ local qualifiers = {
     "pr",
     "issue",
     "discussion",
+    "repository",
     "open",
     "closed",
     "merged",
@@ -315,6 +331,9 @@ local qualifiers = {
     "queued",
     "answered",
     "unanswered",
+    --- Repository related
+    "fork",
+    "sponsorable",
   },
   state = { "open", "closed" },
   reason = { "completed", "not planned" },
@@ -325,7 +344,16 @@ local qualifiers = {
   head = create_complete_branch "head",
   base = create_complete_branch "base",
   status = { "pending", "success", "failure" },
-  ["in"] = { "title", "body", "comments" },
+  ["in"] = {
+    "title",
+    "body",
+    "comments",
+    -- repository related
+    "readme",
+    "description",
+    "name",
+    "topics",
+  },
   no = { "label", "milestone", "assignee", "project" },
   --- User related
   author = create_complete_user "author",
@@ -356,6 +384,21 @@ local qualifiers = {
   --- Discussions
   ["answered-by"] = create_complete_user "answered-by",
   category = complete_category,
+  --- Repositories
+  "size",
+  "pushed",
+  "followers",
+  "forks",
+  "topic",
+  "topics",
+  "license",
+  fork = { "only" },
+  "stars",
+  mirror = { "true", "false" },
+  template = { "true", "false" },
+  has = { "funding-file" },
+  "good-first-issues",
+  "help-wanted-issues",
 }
 
 --- Complete function for search commands. This includes

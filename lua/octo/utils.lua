@@ -2,6 +2,7 @@ local config = require "octo.config"
 local constants = require "octo.constants"
 local gh = require "octo.gh"
 local graphql = require "octo.gh.graphql"
+local queries = require "octo.gh.queries"
 local _, Job = pcall(require, "plenary.job")
 local vim = vim
 
@@ -154,7 +155,7 @@ end
 M.reaction_map = {
   ["THUMBS_UP"] = "👍 ",
   ["THUMBS_DOWN"] = "👎 ",
-  ["LAUGH"] = "😀 ",
+  ["LAUGH"] = "😄 ",
   ["HOORAY"] = "🎉 ",
   ["CONFUSED"] = "😕 ",
   ["HEART"] = "❤️ ",
@@ -392,23 +393,26 @@ function M.create_milestone(title, description)
   }
 end
 
+local branch_switch_message = function()
+  local output = vim.fn.system "git branch --show-current"
+  M.info("Switched to " .. vim.fn.trim(output))
+end
+
 function M.develop_issue(issue_repo, issue_number, branch_repo)
   if M.is_blank(branch_repo) then
     branch_repo = M.get_remote_name()
   end
 
-  local args = { "issue", "develop", "--repo", issue_repo, issue_number, "--checkout", "--branch-repo", branch_repo }
-
-  gh.run {
-    args = args,
-    cb = function(stdout, stderr)
-      if stderr and not M.is_blank(stderr) then
-        M.error(stderr)
-      elseif stdout then
-        local output = vim.fn.system "git branch --show-current"
-        M.info("Switched to " .. output)
-      end
-    end,
+  gh.issue.develop {
+    issue_number,
+    repo = issue_repo,
+    checkout = true,
+    branch_repo = branch_repo,
+    opts = {
+      cb = gh.create_callback {
+        success = branch_switch_message,
+      },
+    },
   }
 end
 
@@ -547,39 +551,31 @@ function M.in_pr_branch(pr)
 end
 
 function M.checkout_pr(pr_number)
-  gh.run {
-    args = { "pr", "checkout", pr_number },
-    cb = function(stdout, stderr)
-      if stderr and not M.is_blank(stderr) then
-        M.error(stderr)
-      elseif stdout then
-        local output = vim.fn.system "git branch --show-current"
-        M.info("Switched to " .. output)
-      end
-    end,
+  gh.pr.checkout {
+    pr_number,
+    opts = {
+      cb = gh.create_callback {
+        success = branch_switch_message,
+      },
+    },
   }
 end
 
 ---@class CheckoutPrSyncOpts
 ---@field repo string
 ---@field pr_number number
----@field timeout number
 
 ---@param opts CheckoutPrSyncOpts
 ---@return nil
 function M.checkout_pr_sync(opts)
-  if not Job then
-    return
-  end
-  Job:new({
-    enable_recording = true,
-    command = "gh",
-    args = { "pr", "checkout", opts.pr_number, "--repo", opts.repo },
-    on_exit = vim.schedule_wrap(function()
-      local output = vim.fn.system "git branch --show-current"
-      M.info("Switched to " .. output)
-    end),
-  }):sync(opts.timeout)
+  gh.pr.checkout {
+    opts.pr_number,
+    repo = opts.repo,
+    opts = {
+      mode = "sync",
+    },
+  }
+  branch_switch_message()
 end
 
 M.merge_method_to_flag = {
@@ -700,9 +696,8 @@ function M.get_repo_id(repo)
   end
 
   local owner, name = M.split_repo(repo)
-  local query = graphql "repository_id_query"
   local id = gh.api.graphql {
-    query = query,
+    query = queries.repository_id,
     fields = { owner = owner, name = name },
     jq = ".data.repository.id",
     opts = { mode = "sync" },
@@ -727,7 +722,7 @@ function M.get_repo_info(repo)
 
   local owner, name = M.split_repo(repo)
   local output = gh.api.graphql {
-    query = graphql "repository_query",
+    query = queries.repository,
     fields = { owner = owner, name = name },
     jq = ".data.repository",
     opts = { mode = "sync" },
@@ -744,9 +739,8 @@ function M.get_repo_templates(repo)
   end
 
   local owner, name = M.split_repo(repo)
-  local query = graphql "repository_templates_query"
   local output = gh.api.graphql {
-    query = query,
+    query = queries.repository_templates,
     fields = { owner = owner, name = name },
     jq = ".data.repository",
     opts = { mode = "sync" },
@@ -936,22 +930,21 @@ end
 ---@param cb function
 function M.get_file_contents(repo, commit, path, cb)
   local owner, name = M.split_repo(repo)
-  local query = graphql("file_content_query", owner, name, commit, path)
-  gh.run {
-    args = { "api", "graphql", "-f", string.format("query=%s", query) },
-    cb = function(output, stderr)
-      if stderr and not M.is_blank(stderr) then
-        M.error(stderr)
-      elseif output then
-        local resp = vim.json.decode(output)
-        local blob = resp.data.repository.object
-        local lines = {}
-        if blob and blob ~= vim.NIL and type(blob.text) == "string" then
-          lines = vim.split(blob.text, "\n")
-        end
-        cb(lines)
-      end
-    end,
+  gh.api.graphql {
+    query = queries.file_content,
+    f = { owner = owner, name = name, expression = commit .. ":" .. path },
+    jq = ".data.repository.object.text",
+    opts = {
+      cb = gh.create_callback {
+        success = function(blob)
+          local lines = {}
+          if blob then
+            lines = vim.split(blob, "\n")
+          end
+          cb(lines)
+        end,
+      },
+    },
   }
 end
 
@@ -1522,10 +1515,8 @@ function M.close_preview_autocmd(events, winnr, bufnrs)
 end
 
 function M.get_user_id(login)
-  local query = graphql "user_query"
-
   local id = gh.api.graphql {
-    query = query,
+    query = queries.user,
     fields = { login = login },
     jq = ".data.user.id",
     opts = { mode = "sync" },
@@ -1546,14 +1537,13 @@ function M.get_label_id(label)
   end
 
   local owner, name = M.split_repo(buffer.repo)
-  local query = graphql "repo_labels_query"
   local jq = ([[
     .data.repository.labels.nodes
     | map(select(.name == "{label}"))
     | .[0].id
   ]]):gsub("{label}", label)
   local id = gh.api.graphql {
-    query = query,
+    query = queries.repo_labels,
     fields = { owner = owner, name = name },
     jq = jq,
     opts = { mode = "sync" },
@@ -1798,7 +1788,8 @@ end
 M.copy_url = function(url, register)
   register = register or "+"
   vim.fn.setreg(register, url, "c")
-  M.info("Copied '" .. url .. "' to the system clipboard (+ register)")
+  local message = register ~= "+" and "(" .. register .. " register)" or "to the system clipboard (+ register)"
+  M.info("Copied '" .. url .. "' " .. message)
 end
 
 M.input = function(opts)
@@ -1812,6 +1803,15 @@ end
 M.get_current_buffer = function()
   local bufnr = vim.api.nvim_get_current_buf()
   return octo_buffers[bufnr]
+end
+
+M.count_discussion_replies = function(discussion)
+  local total_replies = 0
+  for _, comment in ipairs(discussion.comments.nodes) do
+    total_replies = total_replies + comment.replies.totalCount
+  end
+
+  return total_replies
 end
 
 return M

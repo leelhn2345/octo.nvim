@@ -23,6 +23,8 @@
 
 Edit and review GitHub issues, pull requests, and discussions from the comfort of your favorite editor.
 
+Just edit the title, body, or comments as a regular buffer and use `:w(rite)` to sync with GitHub.
+
 [<img src="https://cdn.buymeacoffee.com/buttons/v2/default-blue.png" alt="BuyMeACoffee" width="140">](https://www.buymeacoffee.com/pwntester)
 
 ## 🌲 Table of Contents
@@ -32,12 +34,11 @@ Edit and review GitHub issues, pull requests, and discussions from the comfort o
 - [:octopus: Octo.nvim](#octopus-octonvim)
   - [🌲 Table of Contents](#-table-of-contents)
   - [💫 Features](#-features)
+  - [🔥 Examples](#-examples)
   - [🎯 Requirements](#-requirements)
   - [📦 Installation](#-installation)
   - [🔧 Configuration](#-configuration)
-  - [🚀 Usage](#-usage)
   - [🤖 Commands](#-commands)
-  - [🔥 Examples](#-examples)
   - [📋 PR reviews](#-pr-reviews)
   - [🍞 Completion](#-completion)
   - [🎨 Colors](#-colors)
@@ -51,10 +52,26 @@ Edit and review GitHub issues, pull requests, and discussions from the comfort o
 
 ## 💫 Features
 
-- Edit GitHub issues and PRs
+- Edit GitHub issues, PRs, and discussions
 - Add/Modify/Delete comments
 - Add/Remove label, reactions, assignees, project cards, reviewers, etc.
 - Add Review PRs
+
+## 🔥 Examples
+
+```vim
+Octo https://github.com/pwntester/octo.nvim/issues/12
+Octo issue create
+Octo issue create pwntester/octo.nvim
+Octo comment add
+Octo reaction add hooray
+Octo issue edit pwntester/octo.nvim 1
+Octo issue edit 1
+Octo issue list createdBy=pwntester
+Octo issue list neovim/neovim labels=bug,help\ wanted states=OPEN
+Octo search assignee:pwntester is:pr
+Octo search is:discussion repo:pwntester/octo.nvim category:"Show and Tell"
+```
 
 ## 🎯 Requirements
 
@@ -102,7 +119,7 @@ require"octo".setup({
   default_merge_method = "commit",         -- default merge method which should be used for both `Octo pr merge` and merging from picker, could be `commit`, `rebase` or `squash`
   default_delete_branch = false,           -- whether to delete branch when merging pull request with either `Octo pr merge` or from picker (can be overridden with `delete`/`nodelete` argument to `Octo pr merge`)
   ssh_aliases = {},                        -- SSH aliases. e.g. `ssh_aliases = {["github.com-work"] = "github.com"}`. The key part will be interpreted as an anchored Lua pattern.
-  picker = "telescope",                    -- or "fzf-lua"
+  picker = "telescope",                    -- or "fzf-lua" or "snacks"
   picker_config = {
     use_emojis = false,                    -- only used by "fzf-lua" picker for now
     mappings = {                           -- mappings for the pickers
@@ -110,6 +127,20 @@ require"octo".setup({
       copy_url = { lhs = "<C-y>", desc = "copy url to system clipboard" },
       checkout_pr = { lhs = "<C-o>", desc = "checkout pull request" },
       merge_pr = { lhs = "<C-r>", desc = "merge pull request" },
+    },
+    snacks = {                                -- snacks specific config
+      actions = {                             -- custom actions for specific snacks pickers (array of tables)
+        issues = {                            -- actions for the issues picker
+          -- { name = "my_issue_action", fn = function(picker, item) print("Issue action:", vim.inspect(item)) end, lhs = "<leader>a", desc = "My custom issue action" },
+        },
+        pull_requests = {                     -- actions for the pull requests picker
+          -- { name = "my_pr_action", fn = function(picker, item) print("PR action:", vim.inspect(item)) end, lhs = "<leader>b", desc = "My custom PR action" },
+        },
+        notifications = {},                   -- actions for the notifications picker
+        issue_templates = {},                 -- actions for the issue templates picker
+        search = {},                          -- actions for the search picker
+        -- ... add actions for other pickers as needed
+      },
     },
   },
   comment_icon = "▎",                      -- comment marker
@@ -122,6 +153,29 @@ require"octo".setup({
   ghost_icon = "󰊠 ",                       -- ghost icon
   timeline_marker = " ",                  -- timeline marker
   timeline_indent = "2",                   -- timeline indentation
+  use_timeline_icons = true,               -- toggle timeline icons
+  timeline_icons = {                       -- the default icons based on timelineItems
+    commit = "  ",
+    label = "  ",
+    reference = " ",
+    connected = "  ",
+    subissue = "  ",
+    cross_reference = "  ",
+    parent_issue = "  ",
+    pinned = "  ",
+    milestone = "  ",
+    renamed = "  ",
+    merged = { "  ", "OctoPurple" },
+    closed = {
+      closed = { "  ", "OctoRed" },
+      completed = { "  ", "OctoPurple" },
+      not_planned = { "  ", "OctoGrey" },
+      duplicate = { "  ", "OctoGrey" },
+    },
+    reopened = { "  ", "OctoGreen" },
+    assigned = "  ",
+    review_requested = "  ",
+  },
   right_bubble_delimiter = "",            -- bubble delimiter
   left_bubble_delimiter = "",             -- bubble delimiter
   github_hostname = "",                    -- GitHub Enterprise host
@@ -188,6 +242,9 @@ require"octo".setup({
       expand_step = { lhs = "o", desc = "expand workflow step" },
       open_in_browser = { lhs = "<C-b>", desc = "open workflow run in browser" },
       refresh = { lhs = "<C-r>", desc = "refresh workflow" },
+      rerun = { lhs = "<C-o>", desc = "rerun workflow" },
+      rerun_failed = { lhs = "<C-f>", desc = "rerun failed workflow" },
+      cancel = { lhs = "<C-x>", desc = "cancel workflow" },
       copy_url = { lhs = "<C-y>", desc = "copy url to system clipboard" },
     },
     issue = {
@@ -325,9 +382,6 @@ require"octo".setup({
 })
 ```
 
-## 🚀 Usage
-
-Just edit the issue title, body or comments as a regular buffer and use `:w(rite)` to sync the issue with GitHub.
 
 ## 🤖 Commands
 
@@ -478,21 +532,6 @@ If no command is passed, the argument to `Octo` is treated as a URL from where a
   `mentionable` are specific to the current repo. The `assignable` option is more
   restrictive than `mentionable`.
 
-## 🔥 Examples
-
-```vim
-Octo https://github.com/pwntester/octo.nvim/issues/12
-Octo issue create
-Octo issue create pwntester/octo.nvim
-Octo comment add
-Octo reaction add hooray
-Octo issue edit pwntester/octo.nvim 1
-Octo issue edit 1
-Octo issue list createdBy=pwntester
-Octo issue list neovim/neovim labels=bug,help\ wanted states=OPEN
-Octo search assignee:pwntester is:pr
-Octo search is:discussion repo:pwntester/octo.nvim category:"Show and Tell"
-```
 
 ## 📋 PR reviews
 

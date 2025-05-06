@@ -108,7 +108,7 @@ function OctoBuffer:render_discussion()
   writers.write_title(self.bufnr, tostring(obj.title), 1)
   writers.write_state(self.bufnr, state, self.number)
   writers.write_discussion_details(self.bufnr, obj)
-  writers.write_body(self.bufnr, obj, 12)
+  writers.write_body(self.bufnr, obj, 13)
 
   -- write body reactions
   local reaction_line
@@ -172,6 +172,7 @@ function OctoBuffer:render_issue()
   local unrendered_unlabeled_events = {}
   local unrendered_subissue_added_events = {}
   local unrendered_subissue_removed_events = {}
+  local commits = {}
   local prev_is_event = false
 
   local timeline_nodes = {}
@@ -204,6 +205,11 @@ function OctoBuffer:render_issue()
     if item.__typename ~= "SubIssueRemovedEvent" and #unrendered_subissue_removed_events > 0 then
       writers.write_subissue_events(self.bufnr, unrendered_subissue_removed_events, "removed")
       unrendered_subissue_removed_events = {}
+      prev_is_event = true
+    end
+    if item.__typename ~= "PullRequestCommit" and #commits > 0 then
+      writers.write_commits(self.bufnr, commits)
+      commits = {}
       prev_is_event = true
     end
 
@@ -249,7 +255,7 @@ function OctoBuffer:render_issue()
       writers.write_assigned_event(self.bufnr, item)
       prev_is_event = true
     elseif item.__typename == "PullRequestCommit" then
-      writers.write_commit_event(self.bufnr, item)
+      table.insert(commits, item)
       prev_is_event = true
     elseif item.__typename == "MergedEvent" then
       writers.write_merged_event(self.bufnr, item)

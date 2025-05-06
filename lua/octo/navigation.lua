@@ -1,5 +1,6 @@
 local gh = require "octo.gh"
 local graphql = require "octo.gh.graphql"
+local queries = require "octo.gh.queries"
 local utils = require "octo.utils"
 
 local vim = vim
@@ -118,7 +119,7 @@ function M.go_to_issue()
   local owner, name = utils.split_repo(repo)
 
   gh.api.graphql {
-    query = graphql "issue_kind_query",
+    query = queries.issue_kind,
     fields = { owner = owner, name = name, number = number },
     jq = ".data.repository.issueOrPullRequest.__typename",
     opts = {
@@ -149,6 +150,11 @@ function M.next_comment()
     if not lines or not current_line then
       return
     end
+
+    if #lines == 0 then
+      return
+    end
+
     local target
     if current_line < lines[1] + 1 then
       -- go to first comment
@@ -178,6 +184,11 @@ function M.prev_comment()
     if not lines or not current_line then
       return
     end
+
+    if #lines == 0 then
+      return
+    end
+
     local target
     if current_line > lines[#lines] + 2 then
       -- go to last comment

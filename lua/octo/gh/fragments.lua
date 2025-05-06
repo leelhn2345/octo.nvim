@@ -216,6 +216,17 @@ fragment ClosedEventFragment on ClosedEvent {
     login
   }
   createdAt
+  stateReason
+  closable {
+    __typename
+    ... on Issue {
+      state
+      stateReason
+    }
+    ... on PullRequest {
+      state
+    }
+  }
 }
 ]]
 
@@ -634,6 +645,31 @@ fragment DiscussionCommentFragment on DiscussionComment {
   viewerDidAuthor
   viewerCanUpdate
   viewerCanDelete
+}
+]]
+
+M.repository = [[
+fragment RepositoryFragment on Repository {
+  id
+  createdAt
+  description
+  diskUsage
+  forkCount
+  isArchived
+  isDisabled
+  isEmpty
+  isFork
+  isInOrganization
+  isPrivate
+  isSecurityPolicyEnabled
+  name
+  nameWithOwner
+  parent {
+    nameWithOwner
+  }
+  stargazerCount
+  updatedAt
+  url
 }
 ]]
 
